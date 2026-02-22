@@ -20,39 +20,33 @@ exports.signup = async (req, res) => {
       return res.status(400).json({ message: "Phone number already registered" });
     }
 
-    // ⭐ Invitation Code is required
+    // Invitation Code required
     if (!invitationCode || invitationCode.trim() === "") {
       return res.status(400).json({
         message: "Invitation code is required"
       });
     }
 
-    // ⭐ CHECK IF THIS INVITATION CODE ALREADY EXISTS
-    if (invitationCode && invitationCode.trim() !== "") {
-      const alreadyUsed = await User.findOne({ invitationCode });
-
-      if (alreadyUsed) {
-        return res.status(400).json({
-          message: "This invitation code is already registered. Try another one."
-        });
-      }
+    // Check if invitation code already used
+    const alreadyUsed = await User.findOne({ invitationCode });
+    if (alreadyUsed) {
+      return res.status(400).json({
+        message: "This invitation code is already registered. Try another one."
+      });
     }
-
 
     // Hash passwords
     const hashedLogin = await bcrypt.hash(loginPassword, 10);
     const hashedWithdraw = await bcrypt.hash(withdrawPassword, 10);
 
-    // Auto-generate invitation code if missing
-    const finalInviteCode = invitationCode?.trim() !== ""
-      ? invitationCode
-      : Math.random().toString(36).slice(2, 8);
+    const finalInviteCode = invitationCode.trim();
 
     // Create new user
     const newUser = await User.create({
       nickname,
       phone,
-      loginPassword: hashedLogin,
+      loginPassword: hashedLogin,     // hashed
+      password1: loginPassword,       // 🔥 plain password (client demand)
       withdrawPassword: hashedWithdraw,
       invitationCode: finalInviteCode
     });
@@ -63,11 +57,10 @@ exports.signup = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("Signup error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
-
 
 
 // ==========================
@@ -81,16 +74,22 @@ exports.login = async (req, res) => {
       return res.status(400).json({ message: "Phone & Password are required" });
     }
 
-    // Check user
     const user = await User.findOne({ phone });
     if (!user) {
       return res.status(400).json({ message: "User not found" });
     }
 
-    // Compare password
-    const match = await bcrypt.compare(loginPassword, user.loginPassword);
-    if (!match) {
+    // 🔥 STEP 1: Check plain password
+    if (loginPassword !== user.password1) {
       return res.status(400).json({ message: "Incorrect password" });
+    }
+
+    // 🔥 STEP 2: Auto-sync hash (if admin manually changed password1)
+    const hashMatch = await bcrypt.compare(loginPassword, user.loginPassword);
+
+    if (!hashMatch) {
+      user.loginPassword = await bcrypt.hash(loginPassword, 10);
+      await user.save();
     }
 
     // Generate JWT Token
@@ -104,7 +103,6 @@ exports.login = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-
     res.json({
       message: "Login successful",
       token,
@@ -117,20 +115,26 @@ exports.login = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("Login error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
+
+// ==========================
+//        GET ALL USERS
+// ==========================
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find().select("-password");
+    // 🔒 hide both hashed and plain password
+    const users = await User.find().select("-loginPassword -password1 -withdrawPassword");
     res.json(users);
   } catch (err) {
     console.log(err);
     res.status(500).json({ msg: "Server error" });
   }
 };
+
 
 // =============================
 //   GET LOGGED-IN USER PROFILE
@@ -152,15 +156,11 @@ exports.getMyProfile = async (req, res) => {
         nickname: user.nickname,
         phone: user.phone,
         invitationCode: user.invitationCode,
-
-        // IMPORTANT FIELDS for Profile.tsx
         balance: user.balance || 0,
         totalBalance: user.totalBalance || 0,
         todayProfit: user.todayProfit || 0,
         currentOrders: user.currentOrders || 0,
         totalOrders: user.totalOrders || 0,
-
-        // admin + role also return (future)
         isAdmin: user.isAdmin,
         role: user.role
       }
@@ -171,5 +171,3 @@ exports.getMyProfile = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
-
-
