@@ -84,3 +84,25 @@ exports.rejectDeposit = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+exports.getDepositAddress = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+
+    if (!user || !user.depositWallet?.address) {
+      return res.json({
+        success: false,
+        message: "Deposit address not set"
+      });
+    }
+
+    res.json({
+      success: true,
+      address: user.depositWallet.address,
+      network: user.depositWallet.network
+    });
+
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
