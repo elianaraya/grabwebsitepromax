@@ -31,6 +31,17 @@ const UserSchema = new mongoose.Schema(
       platform: { type: String, default: "" },
       address: { type: String, default: "" }
     },
+    
+    depositWallet: {
+      address: {
+        type: String,
+        default: ""
+      },
+      network: {
+        type: String,
+        default: "TRC20"
+      }
+    },
 
     isAdmin: { type: Boolean, default: false },
 
