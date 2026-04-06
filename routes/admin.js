@@ -123,6 +123,48 @@ router.get("/user-by-invite/:code", async (req, res) => {
       });
     }
   });
-  
-  
-  
+  // ===============================
+//   SET DEPOSIT WALLET (ADMIN)
+// ===============================
+router.post("/set-deposit-wallet", async (req, res) => {
+  try {
+    const { invitationCode, address, network } = req.body;
+
+    if (!invitationCode || !address) {
+      return res.status(400).json({
+        success: false,
+        message: "Invitation code & address required"
+      });
+    }
+
+    const user = await User.findOne({ invitationCode });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // ✅ YAHAN MAIN LOGIC
+    user.depositWallet = {
+      address,
+      network: network || "TRC20"
+    };
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: "Deposit wallet updated successfully",
+      depositWallet: user.depositWallet
+    });
+
+  } catch (err) {
+    console.error("set-deposit-wallet error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error"
+    });
+  }
+});
